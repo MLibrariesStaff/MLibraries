@@ -5,7 +5,7 @@
 //  Version:1.0
 /**
  *  [How To Use]
- *  
+ *
  *  1. ローディング画像のアニメーションタイプを選択
  *  #define ANIMATION_TYPE を１または2にセット
  *
@@ -15,17 +15,17 @@
  *
  *  3. アニメーションタイプが2のときは、画像数をセット
  *  IMAGE_NUM に画像数をセット(1以上)
- *  
+ *
  *  4. 画像のスペースをセット
  *  MARGIN に フロートで数値をセット(めあす 50.0)
  *
  *  5. コントローラーからローディングを表示/非表示
  *  コントローラーでファイルをインポート
  *  #import "MProgress.h"
- *  
+ *
  *  // 表示
  *  [[MProgress sharedManager] showProgress];
- *  
+ *
  *  // 非表示
  *  [[MProgress sharedManager] dismissProgress];
  */

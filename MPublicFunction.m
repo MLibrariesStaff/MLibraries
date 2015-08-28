@@ -182,76 +182,127 @@ NSString *getToday()
 }
 
 /**
- * 最後を『...続きを読む』で省略
+ * 最後に『...続きを読む』をつける
  */
-+ (void)seeMoreTruncatingTail:(UITextView *)textView maxHeight:(CGFloat)maxHeight
++ (void)seeMoreTruncatingTail:(UITextView *)textView numberOfLines:(int)numberOfLines
 {
-    // 省略するかどうか
+    // 省略文字
+    NSString *seeMoreString = [NSString stringWithFormat:@" ...%@", NSLocalizedString(@"続きを読む", @"See More")];
+    
+    // オリジナルサイズ
+    textView.textContainer.lineBreakMode = NSLineBreakByCharWrapping;
+    
+    // はかりなおしがうまくいかないときがあるので使わない
+//    textView.textContainer.maximumNumberOfLines = numberOfLines;
+//    CGSize originalSize = [textView sizeThatFits:textView.frame.size];
+    CGSize originalSize = textView.frame.size;
+    
+    // フルサイズ
     textView.textContainer.maximumNumberOfLines = 0;
+    textView.text = textView.text; // 入れなおさないとうまくいかない時がある
     CGSize fullSize = [textView sizeThatFits:CGSizeMake((CGFloat)textView.width, CGFLOAT_MAX)];
-
-    if (fullSize.height > maxHeight) {
+    
+    // 省略するかどうか
+    CGFloat restHeight  = originalSize.height;
+    NSString *text      = textView.text;
+    NSString *inputText = @"";
+    NSString *line      = textView.text;
+    
+    if (fullSize.height > originalSize.height + 4.0f) {
         
-        // 省略文字
-        NSString *seeMoreString = [NSString stringWithFormat:@" ...%@", NSLocalizedString(@"続きを読む", @"See More")];
+        // 改行があるとき
+        NSRange searchResult = [textView.text rangeOfString:@"\n"];
+        if (searchResult.location != NSNotFound) {
+            NSRange range, subRange;
+            
+            // 最初に文字列全範囲を示すRangeを作成する
+            range = NSMakeRange(0, text.length);
+            
+            // １行ずつ読み出す
+            while (range.length > 0) {
+                // １行分を示すRangeを取得
+                subRange = [text lineRangeForRange:NSMakeRange(range.location, 0)];
+                // 1行分を示すRangeを用いて、文字列から１行抜き出す
+                line = [text substringWithRange:subRange];
+                range.location = NSMaxRange(subRange);
+                range.length -= subRange.length;
+                
+                textView.text = [line stringByReplacingOccurrencesOfString:@"\n" withString:@""];
+                CGSize lineSize = [textView sizeThatFits:CGSizeMake((CGFloat)textView.width, CGFLOAT_MAX)];
+                
+                // この文で最大行を超えているか
+                if (restHeight - lineSize.height < SPACE_S) {
+                    break;
+                }
+                inputText = [NSString stringWithFormat:@"%@%@", inputText, line];
+                restHeight = restHeight - lineSize.height;
+            }
+        }
+        
+        // 最後が改行だけでなければ改行をぬく
+        int plusCount = 0;
+        BOOL isNoCut  = NO;
+        NSString *originalLine = line;
+        if ([line isEqualToString:@"\n"] == NO) {
+            line = [line stringByReplacingOccurrencesOfString:@"\n" withString:@""];
+            if ([line isEqualToString:originalLine] == NO) {
+                plusCount++;
+                
+                // 最後の改行を抜いて省略文字をいれてみよう
+                textView.text = [NSString stringWithFormat:@"%@%@", line, seeMoreString];
+                CGSize lineSize = [textView sizeThatFits:CGSizeMake((CGFloat)textView.width, CGFLOAT_MAX)];
+                if (restHeight > lineSize.height) {
+                    isNoCut = YES;
+                }
+            }
+        }
         
         // 表示文字数を取得
-        NSAttributedString *attrString = [[NSAttributedString alloc] initWithString:textView.text
+        NSAttributedString *attrString = [[NSAttributedString alloc] initWithString:line
                                                                          attributes:@{NSFontAttributeName:textView.font}];
         
         CTFramesetterRef framesetter = CTFramesetterCreateWithAttributedString((CFAttributedStringRef)attrString);
         CGMutablePathRef path = CGPathCreateMutable();
-        CGPathAddRect(path, NULL, CGRectMake(0, 0, textView.width, maxHeight));
+        CGPathAddRect(path, NULL, CGRectMake(0, 0, textView.width, restHeight));
         
         CTFrameRef frame = CTFramesetterCreateFrame(framesetter, CFRangeMake(0, 0), path, NULL);
         CFRange actuallyRenderedRange = CTFrameGetVisibleStringRange(frame);
-        NSString *actuallyRenderedText = [textView.text substringWithRange:NSMakeRange(0, actuallyRenderedRange.length)];
+        // 省略文字のバイト数分を引く
+        NSString *actuallyRenderedText = line;
+        
+        if (isNoCut == NO
+            && (int)(actuallyRenderedRange.length > (int)[seeMoreString lengthOfBytesUsingEncoding:NSShiftJISStringEncoding])) {
+            
+            // 省略部分がすべて全角なら文字数分引く
+            NSString *delString = [line substringWithRange:NSMakeRange((int)actuallyRenderedRange.length - (int)seeMoreString.length, (int)seeMoreString.length)];
+            
+            if ((int)delString.length*2 == (int)[delString lengthOfBytesUsingEncoding:NSShiftJISStringEncoding]) {
+                actuallyRenderedText = [line substringWithRange:NSMakeRange(0, (int)((int)actuallyRenderedRange.length - (int)seeMoreString.length + plusCount))];
+                
+                // それ以外はバイト数分
+            } else {
+                actuallyRenderedText = [line substringWithRange:NSMakeRange(0, (int)((int)actuallyRenderedRange.length - (int)[seeMoreString lengthOfBytesUsingEncoding:NSShiftJISStringEncoding] + plusCount))];
+            }
+        }
         
         // リリース
         CGPathRelease(path);
         CFRelease(framesetter);
         CFRelease(frame);
         
-        // 最後の文字が改行であるとき、なぜかmaxHeightに収まっていないので、あれば消す
-        NSString *lastWord = [actuallyRenderedText substringFromIndex:actuallyRenderedText.length - 1];
-        if ([lastWord isEqualToString:@"\n"] == YES) {
-            actuallyRenderedText = [actuallyRenderedText substringWithRange:NSMakeRange(0, actuallyRenderedRange.length - 1)];
-        }
-        
-        // 省略文字を加えた文字列が最大サイズを超えているか
-        textView.text = [NSString stringWithFormat:@"%@%@", actuallyRenderedText, seeMoreString];
-        CGSize actuallySize = [textView sizeThatFits:CGSizeMake((CGFloat)textView.width, CGFLOAT_MAX)];
-
-        // 越えていればさらに省略
-        if (actuallySize.height > maxHeight) {
-            
-            // 省略文字のバイト数
-            int seeMoreByteLength = (int)[seeMoreString lengthOfBytesUsingEncoding:NSShiftJISStringEncoding];
-            
-            // 省略文字バイト数分の文字数を末尾から取り出す
-            NSString *lastTailWord = [actuallyRenderedText substringFromIndex:actuallyRenderedText.length - seeMoreByteLength];
-            
-            // すべて全角のときはバイト数の半分の文字数
-            int stringCount = 0;
-            if (lastTailWord.length == [lastTailWord lengthOfBytesUsingEncoding:NSShiftJISStringEncoding]/2.0f) {
-                stringCount = seeMoreByteLength/2.0f;
-            
-            } else {
-                stringCount = seeMoreByteLength;
-            }
-            actuallyRenderedText = [actuallyRenderedText substringWithRange:NSMakeRange(0, actuallyRenderedRange.length - stringCount)];
-        }
-
         // 省略文字をつけてセット
         NSMutableAttributedString *attrMutableString = [[NSMutableAttributedString alloc] init];
-        NSAttributedString *string1 = [[NSAttributedString alloc] initWithString:actuallyRenderedText
+        NSAttributedString *string1 = [[NSAttributedString alloc] initWithString:
+                                       [NSString stringWithFormat:@"%@%@", inputText, actuallyRenderedText]
                                                                       attributes:@{NSFontAttributeName:textView.font,
                                                                                    NSForegroundColorAttributeName:textView.textColor}];
         NSAttributedString *string2 = [[NSAttributedString alloc] initWithString:seeMoreString
-                                                                      attributes:@{NSFontAttributeName:FONT_BASE,
+                                                                      attributes:@{NSFontAttributeName:[UIColor blackColor],
                                                                                    NSForegroundColorAttributeName:[UIColor grayColor]}];
         [attrMutableString appendAttributedString:string1];
         [attrMutableString appendAttributedString:string2];
+        
+        textView.textContainer.maximumNumberOfLines = numberOfLines;
         textView.attributedText = attrMutableString;
     }
     return;
@@ -262,64 +313,86 @@ NSString *getToday()
  */
 + (void)encloseTruncatingTail:(UILabel *)label maxHeight:(CGFloat)maxHeight
 {
-    int numberOfLines = (int)label.numberOfLines;
-
-    // 省略するかどうか
+    // 省略文字
+    NSString *encloseString = @"「...」";
+    
+    // オリジナルサイズ
+    label.numberOfLines = numberOfLines;
+    CGSize originalSize = [label sizeThatFits:label.frame.size];
+    
+    // フルサイズ
+    label.lineBreakMode = NSLineBreakByCharWrapping;
     label.numberOfLines = 0;
-    label.text = [NSString stringWithFormat:@"「%@」", label.text];
+    label.text          = label.text;
     CGSize fullSize = [label sizeThatFits:CGSizeMake((CGFloat)label.width, CGFLOAT_MAX)];
-    if (fullSize.height > maxHeight) {
-        // 一旦「」をはずす
-        label.text = [label.text substringWithRange:NSMakeRange(1, label.text.length - 2)];
+    
+    // 省略するかどうか
+    CGFloat restHeight  = originalSize.height;
+    // 一旦「」を外す
+    NSString *text      = [label.text substringWithRange:NSMakeRange(1, label.text.length - 2)];
+    NSString *inputText = @"";
+    NSString *line      = [label.text substringWithRange:NSMakeRange(1, label.text.length - 2)];
+    
+    if (fullSize.height > originalSize.height + 4.0f) {
+        
+        // 改行があるとき
+        NSRange searchResult = [label.text rangeOfString:@"\n"];
+        if (searchResult.location != NSNotFound) {
+            NSRange range, subRange;
+            
+            // 最初に文字列全範囲を示すRangeを作成する
+            range = NSMakeRange(0, text.length);
+            
+            // １行ずつ読み出す
+            while (range.length > 0) {
+                // １行分を示すRangeを取得
+                subRange = [text lineRangeForRange:NSMakeRange(range.location, 0)];
+                // 1行分を示すRangeを用いて、文字列から１行抜き出す
+                line = [text substringWithRange:subRange];
+                
+                range.location = NSMaxRange(subRange);
+                range.length -= subRange.length;
+                label.text = [line stringByReplacingOccurrencesOfString:@"\n" withString:@""];
+                
+                CGSize lineSize = [label sizeThatFits:CGSizeMake((CGFloat)label.width, CGFLOAT_MAX)];
+                
+                // この文で最大行を超えているか
+                if (restHeight - lineSize.height < SPACE_S) {
+                    break;
+                }
+                inputText = [NSString stringWithFormat:@"%@%@", inputText, line];
+                restHeight = restHeight - lineSize.height;
+            }
+        }
+        
+        // 先頭と末尾の空白を削除
+        line = [line stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
         
         // 表示文字数を取得
-        NSAttributedString *attrString = [[NSAttributedString alloc] initWithString:label.text
+        NSAttributedString *attrString = [[NSAttributedString alloc] initWithString:[NSString stringWithFormat:@"「%@...」", line]
                                                                          attributes:@{NSFontAttributeName:label.font}];
         
         CTFramesetterRef framesetter = CTFramesetterCreateWithAttributedString((CFAttributedStringRef)attrString);
         CGMutablePathRef path = CGPathCreateMutable();
-        CGPathAddRect(path, NULL, CGRectMake(0, 0, label.width, maxHeight));
+        CGPathAddRect(path, NULL, CGRectMake(0, 0, label.width, restHeight));
         
         CTFrameRef frame = CTFramesetterCreateFrame(framesetter, CFRangeMake(0, 0), path, NULL);
-        CFRange actuallyRenderedRange  = CTFrameGetVisibleStringRange(frame);
-        NSString *actuallyRenderedText = [label.text substringWithRange:NSMakeRange(0, actuallyRenderedRange.length)];
- 
+        CFRange actuallyRenderedRange = CTFrameGetVisibleStringRange(frame);
+        
+        // 省略文字のバイト数分を引く
+        int length = MIN((int)actuallyRenderedRange.length - ((int)[encloseString lengthOfBytesUsingEncoding:NSShiftJISStringEncoding] - (int)encloseString.length + 1), (int)line.length);
+        NSString *actuallyRenderedText = [line substringWithRange:NSMakeRange(0, length)];
+        
         // リリース
-        CFRelease(frame);
-        CFRelease(framesetter);
         CGPathRelease(path);
-
-        // 最後の文字が改行であるとき、なぜかmaxHeightに収まっていないので、あれば消す
-        if ([actuallyRenderedText isEqualToString:@""] == NO) {
-            NSString *lastWord = [actuallyRenderedText substringFromIndex:actuallyRenderedText.length - 1];
-            if ([lastWord isEqualToString:@"\n"] == YES) {
-                actuallyRenderedText = [actuallyRenderedText substringWithRange:NSMakeRange(0, actuallyRenderedRange.length - 1)];
-            }
-        }
+        CFRelease(framesetter);
+        CFRelease(frame);
         
-        // 省略文字のバイト数
-        NSString *encloseString = @"「...」";
-        int seeMoreByteLength = (int)[encloseString lengthOfBytesUsingEncoding:NSShiftJISStringEncoding];
-        
-        // 省略文字バイト数分の文字数を末尾から取り出す
-        if ([actuallyRenderedText isEqualToString:@""] == NO) {
-            NSString *lastTailWord = [actuallyRenderedText substringFromIndex:actuallyRenderedText.length - seeMoreByteLength];
-        
-            // すべて全角のときはバイト数の半分の文字数
-            int stringCount = 0;
-            if (lastTailWord.length == [lastTailWord lengthOfBytesUsingEncoding:NSShiftJISStringEncoding]/2) {
-                stringCount = seeMoreByteLength/2;
-                
-            } else {
-                stringCount = seeMoreByteLength;
-            }
-            actuallyRenderedText = [actuallyRenderedText substringWithRange:NSMakeRange(0, actuallyRenderedRange.length - stringCount)];
-        }
-            
         // 省略文字をつけてセット
         label.numberOfLines = numberOfLines;
-        label.text = [NSString stringWithFormat:@"「%@...」", actuallyRenderedText];
+        label.text = [NSString stringWithFormat:@"「%@...」", [NSString stringWithFormat:@"%@%@", inputText, actuallyRenderedText]];
     }
+
     return;
 }
 

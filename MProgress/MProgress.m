@@ -36,6 +36,7 @@ int progressCount;
     [window addSubview:mProgress];
     
     [mProgress show];
+    [window bringSubviewToFront:mProgress];
     
     // プログレスを表示
     [UIApplication sharedApplication].networkActivityIndicatorVisible = YES;
@@ -54,19 +55,10 @@ int progressCount;
 - (void)showProgress
 {
     progressCount++;
-    UIWindow *window = [[UIApplication sharedApplication] delegate].window;
-    
-    MProgress *mProgress = nil;
-    NSEnumerator *subviewsEnum = window.subviews.reverseObjectEnumerator;
-    for (UIView *subview in subviewsEnum) {
-        if ([subview isKindOfClass:[MProgress class]]) {
-            mProgress = (MProgress *)subview;
-        }
-    }
-
-    if (mProgress == nil) {
+    if (progressCount == 1) {
         [MProgress showProgress:@"sample" :@"loading..."];
     }
+    return;
 }
 
 /**
@@ -75,13 +67,13 @@ int progressCount;
 - (void)dismissProgress
 {
     progressCount--;
+    progressCount = MAX(0, progressCount);
     if (progressCount == 0) {
         UIWindow *window = [[UIApplication sharedApplication] delegate].window;
-        MProgress *mProgress;
         NSEnumerator *subviewsEnum = window.subviews.reverseObjectEnumerator;
         for (UIView *subview in subviewsEnum) {
             if ([subview isKindOfClass:[MProgress class]]) {
-                mProgress = (MProgress *)subview;
+                MProgress *mProgress = (MProgress *)subview;
                 if (mProgress) {
                     [mProgress dismiss];
                 }
@@ -128,7 +120,7 @@ int progressCount;
     } else {
         loadingImage = [UIImage imageNamed:[NSString stringWithFormat:@"%@1.png", argLoadingImageName]];
     }
-
+    
     // ローディングビューをセット
     CGFloat loadingViewWidth  = loadingImage.size.width + MARGIN;
     CGFloat loadingViewHeight = loadingImage.size.height + MARGIN;
@@ -165,8 +157,8 @@ int progressCount;
                              [lodingImageView.layer addAnimation:rotationAnimation forKey:@"rotateAnimation"];
                          } completion:^(BOOL finished) {
                          }];
-    
-    // アニメーションタイプが2であれば、画像を入れ替え
+        
+        // アニメーションタイプが2であれば、画像を入れ替え
     } else {
         NSMutableArray *rotationImageArray = [NSMutableArray array];
         for (NSInteger i = 1; i < IMAGE_NUM + 1; i++) {
