@@ -1,8 +1,7 @@
 //
 //  MPublicFunction.m
 //
-//  Created by n00874 on 2014/11/05.
-//  Copyright (c) 2014年 cybird. All rights reserved.
+//  Created by maichi
 //
 
 #import "PublicFunction.h"
