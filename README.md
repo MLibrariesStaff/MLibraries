@@ -1,8 +1,8 @@
 #MLibraries
 ##MActionsheet
--MActionsheetButtonView
--MActionsheetDatePickerView
--MActionsheetSelectPickerView
+* MActionsheetButtonView
+* MActionsheetDatePickerView
+* MActionsheetSelectPickerView
 ##MAlert
 ##MAlertModalView
 ##MCropImage
